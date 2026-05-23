@@ -249,12 +249,11 @@ def make_animation():
         ax.set_xlim(-0.7, max_x + 0.7)
         ax.set_ylim(-max_depth - 0.8, 0.8)
         if is_final_hold:
-            badge = (
-                f"patch from node {chosen_nid} · "
-                f"fail→pass {f2p_pass}/{f2p_pass + f2p_fail} · "
+            badge_top = f"patch from node {chosen_nid}"
+            badge_bot = (
+                f"fail→pass {f2p_pass}/{f2p_pass + f2p_fail}  ·  "
                 f"pass→pass {p2p_pass}/{p2p_pass + p2p_fail}"
-                if resolved else
-                f"best patch from node {chosen_nid}"
+                if resolved else "best of the explored branches"
             )
             ax.set_title(
                 f"trace = {instance}    final tree: {n_nodes} nodes, depth {max_depth}",
@@ -264,35 +263,38 @@ def make_animation():
                 color="#1f2330",
                 pad=4,
             )
-            # Giant centered resolved banner — impossible to miss.
+            # Resolved badge — sized to fit the empty area immediately
+            # to the LEFT of the chosen Finished node.
             banner_color = "#16a34a" if resolved else "#b91c1c"
             banner_face = "#dcfce7" if resolved else "#fee2e2"
             mark = "✓ RESOLVED" if resolved else "✗ NOT RESOLVED"
-            cx = (max_x + 0.0) / 2
-            cy = -max_depth / 2
-            # Outer rectangle (large, semi-transparent so tree stays visible)
-            box_w = max_x * 0.62
-            box_h = (max_depth + 1) * 0.55
+            # Empty grid slot to the left of #19 spans x∈[4,9] across depths
+            # 4-7; size + center the banner inside that rectangle.
+            box_w, box_h = 4.8, 2.7
+            if chosen_nid is not None:
+                chx, chy = pos[chosen_nid]
+                cx = chx - 4.1            # banner right edge ~ x=8.8 (left of #16)
+                cy = chy + 2.4            # banner y range ~ [-7, -4.3]
+            else:
+                cx, cy = max_x / 2, -max_depth / 2
             banner = mpatches.FancyBboxPatch(
                 (cx - box_w / 2, cy - box_h / 2), box_w, box_h,
-                boxstyle="round,pad=0.1,rounding_size=0.35",
-                linewidth=4.0, edgecolor=banner_color,
-                facecolor=banner_face, alpha=0.92, zorder=10,
+                boxstyle="round,pad=0.05,rounding_size=0.3",
+                linewidth=3.0, edgecolor=banner_color,
+                facecolor=banner_face, alpha=0.96, zorder=10,
             )
             ax.add_patch(banner)
-            ax.text(cx, cy + box_h * 0.18, mark,
+            ax.text(cx, cy + box_h * 0.28, mark,
                     ha="center", va="center",
-                    fontsize=46, fontweight="bold",
+                    fontsize=22, fontweight="bold",
                     color=banner_color, zorder=11)
-            ax.text(cx, cy - box_h * 0.10, badge,
+            ax.text(cx, cy - box_h * 0.05, badge_top,
                     ha="center", va="center",
-                    fontsize=13, color="#14532d" if resolved else "#7f1d1d",
+                    fontsize=10.5, color="#14532d" if resolved else "#7f1d1d",
                     zorder=11)
-            ax.text(cx, cy - box_h * 0.28,
-                    "winning trajectory highlighted in green",
+            ax.text(cx, cy - box_h * 0.28, badge_bot,
                     ha="center", va="center",
-                    fontsize=10, style="italic",
-                    color="#166534" if resolved else "#7f1d1d",
+                    fontsize=8.5, color="#14532d" if resolved else "#7f1d1d",
                     zorder=11)
         else:
             ax.set_title(
