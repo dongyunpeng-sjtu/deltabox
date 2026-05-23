@@ -132,12 +132,14 @@
   <figure>
     <img src="assets/mcts_expansion.gif" alt="MCTS node expansion animation from a real SWE-bench trace">
     <figcaption>
-      <strong>Live MCTS expansion replayed from a real SWE-bench trace.</strong>
-      Each frame adds one node selected by UCT; colors mark MCTS state
-      (search / plan / edit / finished / rejected), and the yellow ring
-      highlights the newest expansion. With every step the controller
-      checkpoints the parent and restores into a new leaf&mdash;the
-      kind of sub-millisecond churn DeltaBox is built to absorb.
+      <strong>Live MCTS expansion replayed from a real, resolved SWE-bench
+      trace</strong> (Django-11095, 40 nodes, depth 8, 1/1 fail&rarr;pass,
+      19/19 pass&rarr;pass). Each frame adds one UCT-selected node; colors
+      mark MCTS state, the yellow ring highlights the newest expansion,
+      and a red curved arrow shows every checkpoint/restore jump when the
+      controller backtracks to a non-adjacent ancestor before the next
+      expansion&mdash;the kind of sub-millisecond churn DeltaBox is built
+      to absorb. The final frame's green ring marks the chosen patch.
     </figcaption>
   </figure>
 </section>
