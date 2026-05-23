@@ -1,82 +1,70 @@
-# DeltaBox &mdash; Paper Landing Page
+# DeltaBox
 
-Static project page for the paper
-*DeltaBox: Scaling Stateful AI Agents with Millisecond-Level Sandbox
-Checkpoint/Rollback*.
+**Scaling Stateful AI Agents with Millisecond-Level Sandbox Checkpoint/Rollback**
 
-Single-page site, no JavaScript framework, no build step.
+[**📄 Paper (PDF)**](assets/deltabox-paper.pdf) &nbsp;|&nbsp;
+[**📡 arXiv:2605.22781**](https://arxiv.org/abs/2605.22781) &nbsp;|&nbsp;
+[**🌐 Project page**](https://dongyunpeng-sjtu.github.io/deltabox/)
 
-## File layout
+---
 
-```
-.
-├── index.html            # the page itself
-├── style.css             # all styles
-├── assets/
-│   ├── deltabox-paper.pdf   # full paper (download link)
-│   ├── fig1_overview.png    # Figure 1 - architecture
-│   ├── fig_cdf.png          # per-event latency CDF
-│   ├── fig_end2end.png      # end-to-end MCTS time
-│   └── fig_rl_combo.png     # RL fan-out characterisation
-└── README.md
-```
+LLM-powered AI agents require high-frequency state exploration
+(test-time tree search, reinforcement learning training fan-out), but
+today's sandbox mechanisms duplicate the entire filesystem and process
+state on every checkpoint, paying hundreds of milliseconds to seconds
+per operation. DeltaBox eliminates this duplication by only capturing
+the *changes* between consecutive checkpoints, delivering
+**millisecond-level checkpoint and rollback** through co-designed
+OS-level mechanisms.
 
-## Local preview
+## Key Results
 
-```
-cd ~/deltabox-paper-website
-python3 -m http.server 8080
-# open http://localhost:8080
-```
+| Metric | DeltaBox | Best baseline | Speed-up |
+|---|---:|---:|---:|
+| Checkpoint latency (mean) | **14 ms** | 49 ms (Docker commit) | 3.5× |
+| Rollback latency (mean)   | **5 ms**  | 152 ms (copytree+replay) | 30× |
+| End-to-end MCTS overhead  | **3–6 %** | 47–77 % (FC-Diff / CubeSandbox) | 12–25× |
 
-## Publishing to GitHub Pages
+(See [the project page](https://dongyunpeng-sjtu.github.io/deltabox/)
+for full results across SWE-bench MCTS and RL training fan-out.)
 
-This site is intended for a `*.github.io` repo (user or project page).
-Code is **not** open-sourced &mdash; only the paper PDF, figures, and
-this landing page are published. Source code, kernel patches, and
-benchmark scaffolding are kept private.
+## Authors
 
-### Quick deploy (user page)
+Yunpeng Dong<sup>1</sup>, Jingkai He<sup>1,2</sup>,
+Yuze Hou<sup>1</sup>, **Dong Du<sup>1,2</sup>** (📧),
+Zhonghu Xu<sup>3</sup>, Si Yu<sup>3</sup>,
+Yubin Xia<sup>1,2</sup>, Haibo Chen<sup>1,2</sup>
 
-```
-cd ~/deltabox-paper-website
-git init -b main
-git add .
-git commit -m "DeltaBox project page"
-git remote add origin git@github.com:<username>/<username>.github.io.git
-git push -u origin main
-```
+<sup>1</sup> Institute of Parallel and Distributed Systems, Shanghai Jiao Tong University<br>
+<sup>2</sup> Engineering Research Center for Domain-specific Operating Systems, Ministry of Education, China<br>
+<sup>3</sup> Huawei Technologies Co., Ltd.
 
-The page will be live at `https://<username>.github.io/` within a few
-minutes (Pages settings &rarr; Source: `main` branch / root).
+Contact: [Dong.Du@sjtu.edu.cn](mailto:Dong.Du@sjtu.edu.cn)
 
-### Project-page deploy
+## Code Release
 
-If the target is a project page (`https://<username>.github.io/deltabox/`):
+The artifacts (kernel patch, userspace controller, benchmark scripts)
+are not currently public. We plan to release the code after
+publication. If you are interested in early access for academic
+collaboration, please reach out to the corresponding author.
 
-```
-git init -b main
-git add .
-git commit -m "DeltaBox project page"
-git remote add origin git@github.com:<username>/deltabox.git
-git push -u origin main
-```
+## Citation
 
-Then on GitHub: **Settings &rarr; Pages &rarr; Source = `main` branch,
-folder `/ (root)`**.
-
-## Updating the citation
-
-When the paper gets a venue / arXiv ID, edit the `<pre id="bibtex">`
-block in `index.html` (e.g., add `eprint = {arXiv:XXXX.XXXXX}` or
-replace `note = {Preprint}` with the actual conference).
-
-## Updating figures
-
-Source PDFs live in the paper repo. To refresh:
-
-```
-gs -sDEVICE=pngalpha -r144 -o assets/fig_cdf.png path/to/fig_cdf_only.pdf
+```bibtex
+@article{dong2026deltabox,
+  title         = {DeltaBox: Scaling Stateful AI Agents with Millisecond-Level Sandbox Checkpoint/Rollback},
+  author        = {Dong, Yunpeng and He, Jingkai and Hou, Yuze and Du, Dong and Xu, Zhonghu and Yu, Si and Xia, Yubin and Chen, Haibo},
+  year          = {2026},
+  eprint        = {2605.22781},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.OS},
+  url           = {https://arxiv.org/abs/2605.22781}
+}
 ```
 
-PNG at 144 DPI keeps file size small while remaining sharp on retina.
+---
+
+⭐ **If this work is helpful, please consider starring the repo to support us.**
+
+*This repository hosts the [project landing page](https://dongyunpeng-sjtu.github.io/deltabox/).
+For site deployment / maintenance, see [`DEPLOY.md`](DEPLOY.md).*
