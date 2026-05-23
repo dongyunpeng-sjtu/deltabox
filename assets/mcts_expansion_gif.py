@@ -26,15 +26,15 @@ OUT_GIF = Path("/home/dong/deltabox-paper-website/assets/mcts_expansion.gif")
 FPS = 4.0
 HOLD_END = 4
 
-# ───────── colour scheme by MCTS state (matches reference design) ─────────
+# ───────── colour scheme by MCTS state ─────────
+# swe-search MCTS only emits these node states; EditCode is a transition
+# inside PlanToCode and never lands as its own node, so it has no pill.
 STATE_COLOR = {
     "Pending":      "#cbd5e1",  # slate (root)
     "SearchCode":   "#bfdbfe",  # light blue
-    "IdentifyCode": "#93c5fd",
-    "PlanToCode":   "#fbcfe8",  # light pink (matches reference's "Plan" pill)
-    "EditCode":     "#c7d2fe",  # light indigo (matches reference's "Edit" pill)
-    "Finished":     "#bbf7d0",  # light green
-    "Rejected":     "#fecaca",  # light red
+    "PlanToCode":   "#fbcfe8",  # light pink — plan + apply patch
+    "Finished":     "#bbf7d0",  # light green — candidate produced
+    "Rejected":     "#fecaca",  # light red — pruned by simulator
 }
 EDGE_FILL_DEFAULT = "#1e293b"   # ring colour
 HIGHLIGHT_RING = "#f59e0b"      # amber ring for newest node
@@ -90,9 +90,7 @@ def compute_layout(nodes: dict[int, dict]) -> dict[int, tuple[float, float]]:
 SHORT_STATE = {
     "Pending":      "Start",
     "SearchCode":   "Search",
-    "IdentifyCode": "Find",
-    "PlanToCode":   "Plan",
-    "EditCode":     "Edit",
+    "PlanToCode":   "Code",       # plan + edit happen in this state
     "Finished":     "Finished",
     "Rejected":     "Rejected",
 }
@@ -115,6 +113,20 @@ def make_animation():
     max_depth = max(n["depth"] for n in nodes.values())
     max_x = max(p[0] for p in pos.values())
 
+    # harness eval result (sits beside nodes.json)
+    harness = {}
+    hs_path = TRACE.parent / "harness_score.json"
+    if hs_path.exists():
+        try:
+            harness = json.loads(hs_path.read_text())
+        except Exception:
+            harness = {}
+    resolved = bool(harness.get("resolved"))
+    f2p_pass = len(harness.get("fail_to_pass", {}).get("success", []))
+    f2p_fail = len(harness.get("fail_to_pass", {}).get("failure", []))
+    p2p_pass = len(harness.get("pass_to_pass", {}).get("success", []))
+    p2p_fail = len(harness.get("pass_to_pass", {}).get("failure", []))
+
     # figure sizing: scale with tree size, but cap at reasonable aspect
     fig_w = max(8.0, min(13.0, max_x * 0.55 + 2.0))
     fig_h = max(4.2, min(8.0,  (max_depth + 1) * 0.85 + 1.0))
@@ -124,21 +136,25 @@ def make_animation():
     fig.suptitle("MCTS node expansion (real SWE-bench trace)",
                  fontsize=13, fontweight="bold", x=0.02, ha="left", y=0.96)
 
+    # The chosen patch comes from the highest-value Finished node.
+    finished = [(nid, nodes[nid].get("value", 0.0))
+                for nid in order if nodes[nid].get("state_name") == "Finished"]
+    chosen_nid = max(finished, key=lambda t: t[1])[0] if finished else None
+
     legend_handles = [
         mpatches.Patch(color=STATE_COLOR[s], label=lbl, ec="#1e293b", lw=0.6)
         for s, lbl in [
             ("Pending", "Start"),
             ("SearchCode", "Search"),
-            ("PlanToCode", "Plan"),
-            ("EditCode", "Edit"),
+            ("PlanToCode", "Code (plan+edit)"),
             ("Finished", "Finished"),
             ("Rejected", "Rejected"),
         ]
     ]
-    fig.legend(handles=legend_handles, loc="lower center", ncol=6,
+    fig.legend(handles=legend_handles, loc="lower center", ncol=5,
                bbox_to_anchor=(0.5, 0.01), frameon=False, fontsize=8)
 
-    def draw_frame(i: int):
+    def draw_frame(i: int, is_final_hold: bool = False):
         ax.clear()
         ax.set_axis_off()
         added = set(order[:i + 1])
@@ -159,8 +175,12 @@ def make_animation():
         for nid in added:
             x, y = pos[nid]
             face = STATE_COLOR.get(nodes[nid]["state_name"], "#e2e8f0")
-            ring = HIGHLIGHT_RING if nid == latest else EDGE_FILL_DEFAULT
-            lw = 1.6 if nid == latest else 0.6
+            if is_final_hold and nid == chosen_nid:
+                ring, lw = "#15803d", 2.4          # green = chosen patch
+            elif nid == latest and not is_final_hold:
+                ring, lw = HIGHLIGHT_RING, 1.6      # amber = newest
+            else:
+                ring, lw = EDGE_FILL_DEFAULT, 0.6
             el = mpatches.FancyBboxPatch(
                 (x - 0.45, y - 0.27), 0.9, 0.54,
                 boxstyle="round,pad=0.02,rounding_size=0.18",
@@ -173,7 +193,7 @@ def make_animation():
         # 2b) rollback arrow: from the previously-active leaf to the
         #     parent we restored into before expanding `latest`.
         rollback_text = ""
-        if i > 0:
+        if i > 0 and not is_final_hold:
             prev = order[i - 1]
             target = nodes[latest].get("parent_id")
             if target is not None and target != prev and target in added:
@@ -208,18 +228,36 @@ def make_animation():
         # 3) framing
         ax.set_xlim(-0.7, max_x + 0.7)
         ax.set_ylim(-max_depth - 0.8, 0.8)
-        ax.set_title(
-            f"trace = {instance}    iter {i + 1} / {n_nodes}    "
-            f"latest = node {latest} ({nodes[latest]['state_name']}, "
-            f"depth {nodes[latest]['depth']}, visits {nodes[latest]['visits']})"
-            + rollback_text,
-            fontsize=9.5, loc="left", color="#1f2330", pad=4,
-        )
+        if is_final_hold:
+            badge = (
+                f"✓ Resolved — patch from node {chosen_nid}, "
+                f"fail→pass {f2p_pass}/{f2p_pass + f2p_fail}, "
+                f"pass→pass {p2p_pass}/{p2p_pass + p2p_fail}"
+                if resolved else
+                f"✗ Not resolved — best patch from node {chosen_nid}"
+            )
+            ax.set_title(
+                f"trace = {instance}    final tree: {n_nodes} nodes, "
+                f"depth {max_depth}    {badge}",
+                fontsize=9.8,
+                fontweight="bold",
+                loc="left",
+                color="#15803d" if resolved else "#b91c1c",
+                pad=4,
+            )
+        else:
+            ax.set_title(
+                f"trace = {instance}    iter {i + 1} / {n_nodes}    "
+                f"latest = node {latest} ({nodes[latest]['state_name']}, "
+                f"depth {nodes[latest]['depth']}, visits {nodes[latest]['visits']})"
+                + rollback_text,
+                fontsize=9.5, loc="left", color="#1f2330", pad=4,
+            )
         return []
 
     total_frames = n_nodes + HOLD_END
     def frame_fn(f):
-        return draw_frame(min(f, n_nodes - 1))
+        return draw_frame(min(f, n_nodes - 1), is_final_hold=(f >= n_nodes))
 
     anim = FuncAnimation(fig, frame_fn, frames=total_frames,
                          interval=int(1000 / FPS), blit=False)
