@@ -38,6 +38,7 @@ STATE_COLOR = {
 }
 EDGE_FILL_DEFAULT = "#1e293b"   # ring colour
 HIGHLIGHT_RING = "#f59e0b"      # amber ring for newest node
+ROLLBACK_COLOR = "#dc2626"      # red arrow showing checkpoint→restore jump
 
 
 # ───────── tree layout (recursive leaf-count based) ─────────
@@ -169,13 +170,49 @@ def make_animation():
                     ha="center", va="center", fontsize=7.2,
                     color="#0c1320", zorder=3)
 
+        # 2b) rollback arrow: from the previously-active leaf to the
+        #     parent we restored into before expanding `latest`.
+        rollback_text = ""
+        if i > 0:
+            prev = order[i - 1]
+            target = nodes[latest].get("parent_id")
+            if target is not None and target != prev and target in added:
+                x0, y0 = pos[prev]
+                x1, y1 = pos[target]
+                # bow outward so the curve doesn't slice through the tree.
+                rad = 0.35 if x0 <= x1 else -0.35
+                arrow = mpatches.FancyArrowPatch(
+                    (x0, y0 + 0.05), (x1, y1 - 0.05),
+                    arrowstyle="-|>",
+                    connectionstyle=f"arc3,rad={rad}",
+                    color=ROLLBACK_COLOR, lw=2.0,
+                    mutation_scale=15,
+                    shrinkA=14, shrinkB=14,
+                    zorder=4, alpha=0.9,
+                )
+                ax.add_patch(arrow)
+                # label near the midpoint of the chord, nudged perpendicular
+                mx, my = (x0 + x1) / 2, (y0 + y1) / 2
+                dx, dy = (x1 - x0), (y1 - y0)
+                L = (dx * dx + dy * dy) ** 0.5 or 1.0
+                # perpendicular unit vector, sign aligned with rad
+                px, py = -dy / L, dx / L
+                offset = 0.55 * (1 if rad >= 0 else -1)
+                ax.text(mx + px * offset, my + py * offset,
+                        f"rollback {prev}→{target}",
+                        ha="center", va="center", fontsize=7.5,
+                        color=ROLLBACK_COLOR, fontweight="bold",
+                        zorder=5)
+                rollback_text = f"    [rollback {prev}→{target}]"
+
         # 3) framing
         ax.set_xlim(-0.7, max_x + 0.7)
         ax.set_ylim(-max_depth - 0.8, 0.8)
         ax.set_title(
             f"trace = {instance}    iter {i + 1} / {n_nodes}    "
             f"latest = node {latest} ({nodes[latest]['state_name']}, "
-            f"depth {nodes[latest]['depth']}, visits {nodes[latest]['visits']})",
+            f"depth {nodes[latest]['depth']}, visits {nodes[latest]['visits']})"
+            + rollback_text,
             fontsize=9.5, loc="left", color="#1f2330", pad=4,
         )
         return []
