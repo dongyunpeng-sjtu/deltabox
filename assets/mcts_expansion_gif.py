@@ -16,6 +16,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib.animation import FuncAnimation, PillowWriter
+from PIL import Image
 
 # ───────── inputs ─────────
 TRACE = Path(os.environ.get(
@@ -23,8 +24,9 @@ TRACE = Path(os.environ.get(
     "/home/dong/d-overlayfs/traces/swe-search/mimo/mcts/django__django-11095/nodes.json",
 ))
 OUT_GIF = Path("/home/dong/deltabox-paper-website/assets/mcts_expansion.gif")
-FPS = 4.0
-HOLD_END = 4
+FPS = 4.0 / 1.5                # 1.5× slowdown — 375 ms per expansion frame
+HOLD_END = 1                   # one final-hold frame, duration overridden below
+FINAL_HOLD_MS = 1500           # 1.5 s pause on the resolved frame before looping
 
 # ───────── colour scheme by MCTS state ─────────
 # swe-search MCTS only emits these node states; EditCode is a transition
@@ -283,8 +285,31 @@ def make_animation():
     writer = PillowWriter(fps=FPS)
     anim.save(str(OUT_GIF), writer=writer)
     plt.close(fig)
+
+    # Post-process: extend the last (final-hold) frame to FINAL_HOLD_MS.
+    # PillowWriter only supports a uniform per-frame duration, so re-save
+    # with a per-frame duration list.
+    im = Image.open(OUT_GIF)
+    per_frame_dur = int(1000 / FPS)
+    frames, durations = [], []
+    idx = 0
+    while True:
+        try:
+            im.seek(idx)
+        except EOFError:
+            break
+        frames.append(im.copy())
+        durations.append(per_frame_dur)
+        idx += 1
+    if frames:
+        durations[-1] = FINAL_HOLD_MS
+        frames[0].save(
+            OUT_GIF, save_all=True, append_images=frames[1:],
+            duration=durations, loop=0, optimize=False, disposal=2,
+        )
     print(f"wrote {OUT_GIF} ({OUT_GIF.stat().st_size/1024:.0f} KB, "
-          f"{n_nodes} nodes, {total_frames} frames, fig={fig_w:.1f}x{fig_h:.1f})")
+          f"{n_nodes} nodes, {len(frames)} frames @ {per_frame_dur} ms "
+          f"+ {FINAL_HOLD_MS} ms hold, fig={fig_w:.1f}x{fig_h:.1f})")
 
 
 if __name__ == "__main__":
