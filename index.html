@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeltaBox: Scaling Stateful AI Agents with Millisecond-Level Sandbox Checkpoint/Rollback</title>
+<meta name="description" content="DeltaBox is an OS-level rollbackable sandbox for stateful AI agents, achieving millisecond-level checkpoint and rollback through change-based filesystem and process-state management.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="hero">
+  <div class="container">
+    <p class="venue">Preprint &middot; 2026</p>
+    <h1>DeltaBox: Scaling Stateful AI Agents with<br>Millisecond-Level Sandbox Checkpoint/Rollback</h1>
+
+    <ol class="authors">
+      <li>Yunpeng Dong<sup>1</sup></li>
+      <li>Jingkai He<sup>1,2</sup></li>
+      <li>Yuze Hou<sup>1</sup></li>
+      <li>Dong Du<sup>1,2</sup>&nbsp;<span title="corresponding author">&#9993;</span></li>
+      <li>Zhonghu Xu<sup>3</sup></li>
+      <li>Si Yu<sup>3</sup></li>
+      <li>Yubin Xia<sup>1,2</sup></li>
+      <li>Haibo Chen<sup>1,2</sup></li>
+    </ol>
+
+    <ol class="affiliations">
+      <li><sup>1</sup>Institute of Parallel and Distributed Systems, Shanghai Jiao Tong University</li>
+      <li><sup>2</sup>Engineering Research Center for Domain-specific Operating Systems, Ministry of Education, China</li>
+      <li><sup>3</sup>Huawei Technologies Co., Ltd.</li>
+    </ol>
+
+    <nav class="hero-links">
+      <a href="assets/deltabox-paper.pdf" class="btn primary">
+        <span class="icon">&#x1F4C4;</span> Paper (PDF)
+      </a>
+      <a href="#citation" class="btn">
+        <span class="icon">&#x1F4DA;</span> Cite
+      </a>
+      <a href="mailto:Dong.Du@sjtu.edu.cn" class="btn">
+        <span class="icon">&#9993;</span> Contact
+      </a>
+    </nav>
+  </div>
+</header>
+
+<main class="container">
+
+<section class="abstract">
+  <h2>Abstract</h2>
+  <p>
+    LLM-powered AI agents require high-frequency state exploration
+    (e.g., test-time tree search and reinforcement learning), relying on
+    rapid checkpoint and rollback (C/R) of the complete sandbox state,
+    including files and process state (memory, contexts, etc.). Existing
+    mechanisms duplicate the entire state, causing hundreds of
+    milliseconds to seconds of latency per C/R, which severely
+    bottlenecks deep search and large-scale fan-outs.
+  </p>
+  <p>
+    This paper observes that subsequent checkpoints in AI agents are
+    highly similar. Therefore, instead of full duplication, a sandbox
+    should <em>only duplicate the changes between consecutive
+    checkpoints</em> (<strong>Key Insight</strong>). We propose a new
+    OS-level abstraction, <em>AgentState</em>, to enable change-based
+    transactional C/R for AI agents with two co-designed OS mechanisms:
+    <em>DeltaFS</em> for change-based filesystem C/R, and
+    <em>DeltaCR</em> for change-based process state C/R.
+  </p>
+  <p>
+    We then present <strong>DeltaBox</strong>, a novel agent sandbox
+    achieving millisecond-level C/R through these two new mechanisms.
+    Evaluations on SWE-bench and RL micro-benchmarks show DeltaBox
+    completes checkpoint and rollback in millisecond-level latency
+    (14&nbsp;ms and 5&nbsp;ms, respectively), empowering agents to
+    explore substantially more nodes under fixed time budgets.
+  </p>
+</section>
+
+<section class="highlights">
+  <h2>Highlights</h2>
+  <div class="cards">
+    <div class="card">
+      <h3>14 ms checkpoint</h3>
+      <p>Incremental CRIU dump hidden under the LLM inference window,
+      with a template-creating <code>fork()</code> ready for
+      low-millisecond restore.</p>
+    </div>
+    <div class="card">
+      <h3>5 ms rollback</h3>
+      <p>OverlayFS layer-switch <code>ioctl</code> in parallel with a
+      warm template <code>fork()</code>&mdash;no full process or
+      filesystem image is rebuilt on the critical path.</p>
+    </div>
+    <div class="card">
+      <h3>OS-level integration</h3>
+      <p>A modified Linux 6.8 overlayfs module plus a CRIU-coordinated
+      template pool, exposing a single transactional
+      <em>AgentState</em> primitive to user space.</p>
+    </div>
+    <div class="card">
+      <h3>1&ndash;3 orders of magnitude</h3>
+      <p>Faster than file-copy and container/VM baselines across
+      SWE-bench MCTS replay and RL training fan-out.</p>
+    </div>
+  </div>
+</section>
+
+<section class="figures">
+  <h2>System Overview</h2>
+  <figure>
+    <img src="assets/fig1_overview.png" alt="DeltaBox architecture overview">
+    <figcaption>
+      <strong>Figure 1.</strong> DeltaBox's four-layer architecture.
+      The State Manager coordinates DeltaFS (Layer&nbsp;2, filesystem
+      state) and DeltaCR (Layer&nbsp;3, process state) to maintain
+      consistent (filesystem, memory) state pairs at each search tree
+      node.
+    </figcaption>
+  </figure>
+</section>
+
+<section class="figures">
+  <h2>Key Results</h2>
+
+  <figure>
+    <img src="assets/fig_cdf.png" alt="Per-event checkpoint/restore latency CDF">
+    <figcaption>
+      <strong>Per-event latency CDF.</strong> DeltaBox's per-event
+      checkpoint and restore distributions sit one to three orders of
+      magnitude left of every baseline (copytree+replay,
+      docker+replay, Firecracker, CRIU+copytree, CRIU+docker) across
+      the entire range, with no long-tail crossover.
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="assets/fig_end2end.png" alt="End-to-end MCTS time normalized to LLM-only floor">
+    <figcaption>
+      <strong>End-to-end MCTS time</strong>, normalized to the LLM-only
+      floor across five SWE-bench Verified instances (Qwen3-Coder-30B
+      traces; 100 expansions + 49 rollbacks per trajectory). DeltaBox
+      stays at 1.03&ndash;1.06&times;, while FC-Diff+dm reaches
+      1.87&ndash;3.84&times; and CubeSandbox+dm 2.62&ndash;4.29&times;.
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="assets/fig_rl_combo.png" alt="RL training fan-out characterisation">
+    <figcaption>
+      <strong>RL training fan-out characterisation</strong>, five
+      substrates on the same GPU cluster. (a) Substrate 1:<em>N</em>
+      fan-out latency; (b) <em>T<sub>gen</sub></em> vs.
+      <em>T<sub>train</sub></em> for three Qwen models;
+      (c) sync GPU utilization on Qwen2.5-7B.
+    </figcaption>
+  </figure>
+</section>
+
+<section id="citation" class="citation">
+  <h2>BibTeX Citation</h2>
+  <div class="citation-box">
+    <button id="copy-btn" class="copy-btn" aria-label="Copy citation">
+      <span class="copy-text">Copy</span>
+    </button>
+<pre id="bibtex">@article{dong2026deltabox,
+  title   = {DeltaBox: Scaling Stateful AI Agents with Millisecond-Level Sandbox Checkpoint/Rollback},
+  author  = {Dong, Yunpeng and He, Jingkai and Hou, Yuze and Du, Dong and Xu, Zhonghu and Yu, Si and Xia, Yubin and Chen, Haibo},
+  year    = {2026},
+  note    = {Preprint},
+  institution = {Institute of Parallel and Distributed Systems, Shanghai Jiao Tong University}
+}</pre>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="container">
+    <p>
+      For questions or collaboration inquiries, please contact
+      <a href="mailto:Dong.Du@sjtu.edu.cn">Dong&nbsp;Du</a>.
+    </p>
+    <p class="small">
+      &copy; 2026 Institute of Parallel and Distributed Systems,
+      Shanghai Jiao Tong University.
+    </p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var btn = document.getElementById('copy-btn');
+  var src = document.getElementById('bibtex');
+  if (!btn || !src) return;
+  btn.addEventListener('click', function () {
+    var text = src.innerText;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(flash, fallback);
+    } else {
+      fallback();
+    }
+    function fallback() {
+      var r = document.createRange();
+      r.selectNodeContents(src);
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(r);
+      try { document.execCommand('copy'); flash(); }
+      catch (e) { /* no-op */ }
+      sel.removeAllRanges();
+    }
+    function flash() {
+      var label = btn.querySelector('.copy-text');
+      var old = label.textContent;
+      label.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(function () {
+        label.textContent = old;
+        btn.classList.remove('copied');
+      }, 1500);
+    }
+  });
+})();
+</script>
+
+</body>
+</html>
