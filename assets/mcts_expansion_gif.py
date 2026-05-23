@@ -26,7 +26,7 @@ TRACE = Path(os.environ.get(
 OUT_GIF = Path("/home/dong/deltabox-paper-website/assets/mcts_expansion.gif")
 FPS = 4.0 / 1.5                # 1.5× slowdown — 375 ms per expansion frame
 HOLD_END = 1                   # one final-hold frame, duration overridden below
-FINAL_HOLD_MS = 1500           # 1.5 s pause on the resolved frame before looping
+FINAL_HOLD_MS = 3000           # 3 s pause on the resolved frame before looping
 
 # ───────── colour scheme by MCTS state ─────────
 # swe-search MCTS only emits these node states; EditCode is a transition
@@ -250,21 +250,50 @@ def make_animation():
         ax.set_ylim(-max_depth - 0.8, 0.8)
         if is_final_hold:
             badge = (
-                f"✓ Resolved — patch from node {chosen_nid}, "
-                f"fail→pass {f2p_pass}/{f2p_pass + f2p_fail}, "
+                f"patch from node {chosen_nid} · "
+                f"fail→pass {f2p_pass}/{f2p_pass + f2p_fail} · "
                 f"pass→pass {p2p_pass}/{p2p_pass + p2p_fail}"
                 if resolved else
-                f"✗ Not resolved — best patch from node {chosen_nid}"
+                f"best patch from node {chosen_nid}"
             )
             ax.set_title(
-                f"trace = {instance}    final tree: {n_nodes} nodes, "
-                f"depth {max_depth}    {badge}",
+                f"trace = {instance}    final tree: {n_nodes} nodes, depth {max_depth}",
                 fontsize=9.8,
                 fontweight="bold",
                 loc="left",
-                color="#15803d" if resolved else "#b91c1c",
+                color="#1f2330",
                 pad=4,
             )
+            # Giant centered resolved banner — impossible to miss.
+            banner_color = "#16a34a" if resolved else "#b91c1c"
+            banner_face = "#dcfce7" if resolved else "#fee2e2"
+            mark = "✓ RESOLVED" if resolved else "✗ NOT RESOLVED"
+            cx = (max_x + 0.0) / 2
+            cy = -max_depth / 2
+            # Outer rectangle (large, semi-transparent so tree stays visible)
+            box_w = max_x * 0.62
+            box_h = (max_depth + 1) * 0.55
+            banner = mpatches.FancyBboxPatch(
+                (cx - box_w / 2, cy - box_h / 2), box_w, box_h,
+                boxstyle="round,pad=0.1,rounding_size=0.35",
+                linewidth=4.0, edgecolor=banner_color,
+                facecolor=banner_face, alpha=0.92, zorder=10,
+            )
+            ax.add_patch(banner)
+            ax.text(cx, cy + box_h * 0.18, mark,
+                    ha="center", va="center",
+                    fontsize=46, fontweight="bold",
+                    color=banner_color, zorder=11)
+            ax.text(cx, cy - box_h * 0.10, badge,
+                    ha="center", va="center",
+                    fontsize=13, color="#14532d" if resolved else "#7f1d1d",
+                    zorder=11)
+            ax.text(cx, cy - box_h * 0.28,
+                    "winning trajectory highlighted in green",
+                    ha="center", va="center",
+                    fontsize=10, style="italic",
+                    color="#166534" if resolved else "#7f1d1d",
+                    zorder=11)
         else:
             ax.set_title(
                 f"trace = {instance}    iter {i + 1} / {n_nodes}    "
