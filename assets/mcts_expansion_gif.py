@@ -141,6 +141,17 @@ def make_animation():
                 for nid in order if nodes[nid].get("state_name") == "Finished"]
     chosen_nid = max(finished, key=lambda t: t[1])[0] if finished else None
 
+    # Winning trajectory: ancestor chain from root → chosen_nid.
+    winning_path: list[int] = []
+    if chosen_nid is not None:
+        cur = chosen_nid
+        while cur is not None:
+            winning_path.append(cur)
+            cur = nodes[cur].get("parent_id")
+        winning_path.reverse()
+    winning_set = set(winning_path)
+    winning_edges = set(zip(winning_path, winning_path[1:]))  # (parent, child)
+
     legend_handles = [
         mpatches.Patch(color=STATE_COLOR[s], label=lbl, ec="#1e293b", lw=0.6)
         for s, lbl in [
@@ -161,13 +172,18 @@ def make_animation():
         latest = order[i]
 
         # 1) edges first (parent → child for each added node whose parent
-        #    is also added)
+        #    is also added). On the final hold frame, the winning path
+        #    is drawn thicker in green underneath the regular edges.
         for nid in added:
             pid = nodes[nid].get("parent_id")
             if pid is None or pid not in added:
                 continue
             x0, y0 = pos[pid]
             x1, y1 = pos[nid]
+            on_path = is_final_hold and (pid, nid) in winning_edges
+            if on_path:
+                ax.plot([x0, x1], [y0, y1], color="#15803d", lw=3.4,
+                        solid_capstyle="round", zorder=1.5, alpha=0.85)
             ax.plot([x0, x1], [y0, y1], color="#94a3b8", lw=0.9,
                     solid_capstyle="round", zorder=1)
 
@@ -176,7 +192,9 @@ def make_animation():
             x, y = pos[nid]
             face = STATE_COLOR.get(nodes[nid]["state_name"], "#e2e8f0")
             if is_final_hold and nid == chosen_nid:
-                ring, lw = "#15803d", 2.4          # green = chosen patch
+                ring, lw = "#15803d", 2.6           # thick green = chosen patch
+            elif is_final_hold and nid in winning_set:
+                ring, lw = "#16a34a", 1.8           # green = on winning path
             elif nid == latest and not is_final_hold:
                 ring, lw = HIGHLIGHT_RING, 1.6      # amber = newest
             else:
